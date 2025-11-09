@@ -159,4 +159,3 @@ if st.button("🎯 Get Recommendations"):
             st.dataframe(recs[['title', 'genres', 'score']].reset_index(drop=True))
 
 st.markdown("---")
-st.caption("Developed by Ali Mohammad — Movie Recommendation Project")

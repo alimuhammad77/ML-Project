@@ -13,8 +13,6 @@ def train_content_tfidf():
     os.makedirs("models", exist_ok=True)
 
     movies = pd.read_csv("dataset/movies_100k.csv")
-    if "genres" not in movies.columns:
-        raise ValueError("❌ movies_100k.csv must include a 'genres' column.")
 
     tfidf = TfidfVectorizer(stop_words="english")
     tfidf_matrix = tfidf.fit_transform(movies["genres"].fillna(""))
