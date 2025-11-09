@@ -35,57 +35,45 @@ def load_npy(path):
 
 svd_model = load_model("models/svd_model.pkl")
 content_sim = load_npy("models/content_similarity.npy")
-hybrid_model = load_model("models/hybrid_model.pkl")
 
 # -------- Recommendation Functions --------
 def recommend_cf(user_ratings_dict, top_n=10):
-    """Collaborative Filtering (SVD)"""
     if svd_model is None:
         st.error("❌ SVD model not found. Train using collaborative_svd.py")
         return pd.DataFrame()
-
     all_movie_ids = movies['movieId'].unique()
     rated_ids = list(user_ratings_dict.keys())
     candidates = [m for m in all_movie_ids if m not in rated_ids]
-
     predictions = []
-    for mid in candidates[:1000]:  # limit for speed
+    for mid in candidates[:1000]:
         preds = [svd_model.predict(uid, mid).est for uid in ratings['userId'].unique()[:20]]
         predictions.append((mid, np.mean(preds)))
-
     df = pd.DataFrame(predictions, columns=['movieId', 'score'])
     return df.merge(movies, on='movieId').sort_values('score', ascending=False).head(top_n)
 
 def recommend_content(user_ratings_dict, top_n=10):
-    """Content-Based (TF-IDF Similarity)"""
     if content_sim is None:
         st.error("❌ Content similarity not found. Train using content_tfidf.py")
         return pd.DataFrame()
-
     id_to_idx = {mid: idx for idx, mid in enumerate(movies['movieId'])}
     rated = [mid for mid in user_ratings_dict if mid in id_to_idx]
     if not rated:
         st.warning("⚠️ Please rate at least one movie.")
         return pd.DataFrame()
-
     user_profile = np.zeros(len(movies))
     for mid, rating in user_ratings_dict.items():
         idx = id_to_idx[mid]
         user_profile += content_sim[idx] * rating
-
     scores = [(movies.iloc[i]['movieId'], score) for i, score in enumerate(user_profile)]
     df = pd.DataFrame(scores, columns=['movieId', 'score'])
     df = df[~df['movieId'].isin(rated)]
     return df.merge(movies, on='movieId').sort_values('score', ascending=False).head(top_n)
 
 def recommend_hybrid(user_ratings_dict, top_n=10, w_cf=0.6, w_cb=0.4):
-    """Hybrid: Combine Collaborative + Content-Based"""
     cf = recommend_cf(user_ratings_dict, top_n=None)
     cb = recommend_content(user_ratings_dict, top_n=None)
-
     cf_scores = dict(zip(cf['movieId'], cf['score']))
     cb_scores = dict(zip(cb['movieId'], cb['score']))
-
     all_ids = set(cf_scores.keys()).union(cb_scores.keys())
     combined = [(mid, w_cf * cf_scores.get(mid, 3.0) + w_cb * cb_scores.get(mid, 0.0)) for mid in all_ids]
     df = pd.DataFrame(combined, columns=['movieId', 'score'])
@@ -100,43 +88,63 @@ model_choice = st.selectbox(
     ["Collaborative Filtering (SVD)", "Content-Based (TF-IDF)", "Hybrid Model"]
 )
 
-st.markdown("### 🎬 Add your movie ratings")
+if "user_ratings" not in st.session_state:
+    st.session_state.user_ratings = {}
 
-# --- Movie search with autocomplete ---
-search_query = st.text_input("Search for a movie:")
+# --- Search bar with live movie suggestions ---
+search_query = st.text_input("🔍 Search a movie:")
 
-filtered_movies = movies[movies['title'].str.contains(search_query, case=False, na=False)] if search_query else movies
-movie_title = st.selectbox(
-    "Select a movie from results:",
-    filtered_movies['title'].head(20).tolist() if not filtered_movies.empty else []
+suggested_movies = (
+    movies[movies['title'].str.contains(search_query, case=False, na=False)]
+    if search_query
+    else pd.DataFrame()
 )
 
-movie_rating = st.slider("Your Rating", 0.5, 5.0, 3.0, 0.5)
+if not suggested_movies.empty:
+    selected_movie = st.selectbox(
+        "🎬 Select a movie from search results:",
+        suggested_movies['title'].head(15).tolist()
+    )
+else:
+    selected_movie = None
 
-if st.button("Add Movie"):
-    if movie_title:
-        movie_id = title_to_id[movie_title]
-        if "user_ratings" not in st.session_state:
-            st.session_state.user_ratings = []
-        st.session_state.user_ratings.append((movie_id, movie_rating))
-        st.success(f"✅ Added: {movie_title} - {movie_rating}/5")
-    else:
-        st.error("❌ Please select a valid movie from the dropdown.")
+movie_rating = st.slider("⭐ Your Rating", 0.5, 5.0, 3.0, 0.5)
+
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("➕ Add Movie"):
+        if selected_movie:
+            movie_id = title_to_id[selected_movie]
+            st.session_state.user_ratings[movie_id] = movie_rating
+            st.success(f"✅ Added: {selected_movie} - {movie_rating}/5")
+        else:
+            st.error("❌ Please select a valid movie from search results.")
+with col2:
+    if st.button("🗑️ Remove Selected Movie"):
+        if selected_movie:
+            movie_id = title_to_id.get(selected_movie)
+            if movie_id in st.session_state.user_ratings:
+                del st.session_state.user_ratings[movie_id]
+                st.success(f"🗑️ Removed: {selected_movie}")
+            else:
+                st.warning("⚠️ Movie not in your rated list.")
+        else:
+            st.error("❌ Please select a movie to remove.")
 
 # --- Display rated movies ---
-if "user_ratings" in st.session_state and st.session_state.user_ratings:
-    st.write("**Your Rated Movies:**")
+if st.session_state.user_ratings:
+    st.markdown("### 🎬 Your Rated Movies")
     rated_df = pd.DataFrame([
         {"Title": id_to_title[mid], "Rating": rating}
-        for mid, rating in st.session_state.user_ratings
+        for mid, rating in st.session_state.user_ratings.items()
     ])
     st.table(rated_df)
 
 if st.button("🎯 Get Recommendations"):
-    if "user_ratings" not in st.session_state or not st.session_state.user_ratings:
+    if not st.session_state.user_ratings:
         st.warning("⚠️ Please add at least one movie before getting recommendations.")
     else:
-        user_ratings_dict = dict(st.session_state.user_ratings)
+        user_ratings_dict = st.session_state.user_ratings
         if model_choice == "Collaborative Filtering (SVD)":
             recs = recommend_cf(user_ratings_dict)
         elif model_choice == "Content-Based (TF-IDF)":
