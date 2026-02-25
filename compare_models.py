@@ -1,4 +1,3 @@
-# compare_models.py
 from collaborative_svd import train_collaborative_svd
 from content_tfidf import train_content_tfidf
 from hybrid_weighted import train_hybrid_weighted

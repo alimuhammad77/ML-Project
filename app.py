@@ -6,7 +6,6 @@ import os
 
 st.set_page_config(page_title="🎬 Movie Recommendation System", layout="wide")
 
-# -------- Load Data --------
 @st.cache_data
 def load_movies():
     return pd.read_csv("dataset/movies_100k.csv")
@@ -21,7 +20,6 @@ ratings = load_ratings()
 title_to_id = dict(zip(movies['title'], movies['movieId']))
 id_to_title = dict(zip(movies['movieId'], movies['title']))
 
-# -------- Load Models --------
 def load_model(path):
     if os.path.exists(path):
         with open(path, "rb") as f:
@@ -36,7 +34,6 @@ def load_npy(path):
 svd_model = load_model("models/svd_model.pkl")
 content_sim = load_npy("models/content_similarity.npy")
 
-# -------- Recommendation Functions --------
 def recommend_cf(user_ratings_dict, top_n=10):
     if svd_model is None:
         st.error("❌ SVD model not found. Train using collaborative_svd.py")
@@ -79,7 +76,6 @@ def recommend_hybrid(user_ratings_dict, top_n=10, w_cf=0.6, w_cb=0.4):
     df = pd.DataFrame(combined, columns=['movieId', 'score'])
     return df.merge(movies, on='movieId').sort_values('score', ascending=False).head(top_n)
 
-# -------- Streamlit UI --------
 st.title("🎥 Movie Recommendation System")
 st.write("Input movies you've watched and rate them to get personalized recommendations.")
 
@@ -91,7 +87,6 @@ model_choice = st.selectbox(
 if "user_ratings" not in st.session_state:
     st.session_state.user_ratings = {}
 
-# --- Search bar with live movie suggestions ---
 search_query = st.text_input("🔍 Search a movie:")
 
 suggested_movies = (
@@ -131,7 +126,6 @@ with col2:
         else:
             st.error("❌ Please select a movie to remove.")
 
-# --- Display rated movies ---
 if st.session_state.user_ratings:
     st.markdown("### 🎬 Your Rated Movies")
     rated_df = pd.DataFrame([

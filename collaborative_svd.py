@@ -1,4 +1,3 @@
-# collaborative_svd.py
 import pandas as pd
 from surprise import SVD, Dataset, Reader
 from surprise.model_selection import train_test_split
