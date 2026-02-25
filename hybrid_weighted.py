@@ -16,7 +16,6 @@ def train_hybrid_weighted():
     ratings = pd.read_csv("dataset/ratings_100k.csv")
     movies = pd.read_csv("dataset/movies_100k.csv")
 
-    # Collaborative Part
     reader = Reader(rating_scale=(0.5, 5))
     data = Dataset.load_from_df(ratings[['userId', 'movieId', 'rating']], reader)
     trainset, testset = train_test_split(data, test_size=0.2)
@@ -26,16 +25,13 @@ def train_hybrid_weighted():
     preds = svd.test(testset)
     rmse_cf = accuracy.rmse(preds, verbose=False)
 
-    # Content-Based Part
     tfidf = TfidfVectorizer(stop_words="english")
     tfidf_matrix = tfidf.fit_transform(movies["genres"].fillna(""))
     cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
 
-    # Weighted Hybrid Combination (0.7 CF + 0.3 Content)
     hybrid_weight = 0.7
     hybrid_rmse = rmse_cf * hybrid_weight
 
-    # Save hybrid model in models directory
     with open("models/hybrid_model.pkl", "wb") as f:
         pickle.dump({"svd": svd, "cosine_sim": cosine_sim, "movies": movies}, f)
 
